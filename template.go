@@ -29,9 +29,8 @@ type methodDesc struct {
 	// http_rule
 	Path         string
 	Method       string
-	HasBody      bool
-	Body         string
-	ResponseBody string
+	HasByte      bool
+	HasFile		 bool
 }
 
 func (s *serviceDesc) execute() string {

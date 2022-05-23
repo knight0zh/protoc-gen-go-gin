@@ -1,8 +1,12 @@
 {{$svrName := .ServiceName}}
 type {{.ServiceName}}GinServer interface {
 {{- range .MethodSets}}
-    {{.Comment}}
+    {{- .Comment}}
+    {{- if (.HasFile)}}
+    {{.MethodName}}(context.Context, *multipart.FileHeader) (*{{.Reply}}, error)
+    {{- else}}
 	{{.MethodName}}(context.Context, *{{.Request}}) (*{{.Reply}}, error)
+	{{- end}}
 {{- end}}
 }
 
@@ -29,42 +33,57 @@ func response(ctx *gin.Context, status, code int, msg string, data interface{}) 
 
 {{range .MethodSets}}
 func (s *{{$svrName}}) {{.MethodName}} (ctx *gin.Context) {
+{{- if not (.HasFile)}}
 	var in {{.Request}}
-{{if .HasPathParams}}
+{{- end}}
+{{- if .HasPathParams}}
 	if err := ctx.ShouldBindUri(&in); err != nil {
 		response(ctx, 400, -1, "参数错误", nil)
 		return
 	}
-{{end}}
-{{if .HasBody}}
+{{- else if .HasByte}}
     data, err := ioutil.ReadAll(ctx.Request.Body)
     	if err != nil {
     		response(ctx, 400, -1, "参数错误", nil)
     		return
     	}
-    in.HttpBody = &httpbody.HttpBody{Data: data}
-{{else if eq .Method "GET" "DELETE" }}
+	in.HttpBody = &httpbody.HttpBody{
+		ContentType: ctx.ContentType(),
+		Data:        data,
+	}
+{{- else if .HasFile}}
+    var in *multipart.FileHeader
+    in, err := ctx.FormFile("file")
+    if err != nil {
+        response(ctx, 400, -1, "参数错误", nil)
+        return
+    }
+{{- else if eq .Method "GET" "DELETE" }}
 	if err := ctx.ShouldBindQuery(&in); err != nil {
 		response(ctx, 400, -1, "参数错误", nil)
 		return
 	}
-{{else if eq .Method "POST" "PUT" }}
+{{- else if eq .Method "POST" "PUT" }}
 	if err := ctx.ShouldBindJSON(&in); err != nil {
 		response(ctx, 400, -1, "参数错误", nil)
 		return
 	}
-{{else}}
+{{- else}}
 	if err := ctx.ShouldBind(&in); err != nil {
 		response(ctx, 400, -1, "参数错误", nil)
 		return
 	}
-{{end}}
+{{- end}}
 	md := metadata.New(nil)
 	for k, v := range ctx.Request.Header {
 		md.Set(k, v...)
 	}
 	newCtx := metadata.NewIncomingContext(ctx, md)
-	out, err := s.server.{{.MethodName}}(newCtx, &in)
+	{{- if not (.HasFile)}}
+    	out, err := s.server.{{.MethodName}}(newCtx, &in)
+    {{- else}}
+        out, err := s.server.{{.MethodName}}(newCtx, in)
+    {{- end}}
 	if err != nil {
 		_ = ctx.Error(err)
 		response(ctx, 500, -1, "未知错误", nil)
@@ -76,8 +95,8 @@ func (s *{{$svrName}}) {{.MethodName}} (ctx *gin.Context) {
 {{end}}
 
 func (s *{{$svrName}}) RegisterHandlers() {
-{{range .MethodSets}}
-    {{.Comment}}
+{{- range .MethodSets}}
+    {{- .Comment}}
 	s.router.{{.Method}}("{{.Path}}", s.{{.MethodName}})
-{{end}}
+{{- end}}
 }

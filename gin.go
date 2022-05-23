@@ -105,16 +105,14 @@ func defaultMethod(g *protogen.GeneratedFile, m *protogen.Method) *methodDesc {
 	}
 
 	md := buildMethodDesc(g, m, httpMethod, path)
-	md.Body = "*"
 	return md
 }
 
-
 func buildHTTPRule(g *protogen.GeneratedFile, m *protogen.Method, rule *annotations.HttpRule) *methodDesc {
 	var (
-		path         string
-		method       string
-		body         string
+		path   string
+		method string
+		body   string
 	)
 
 	switch pattern := rule.Pattern.(type) {
@@ -140,8 +138,14 @@ func buildHTTPRule(g *protogen.GeneratedFile, m *protogen.Method, rule *annotati
 	body = rule.Body
 	//responseBody = rule.ResponseBody
 	md := buildMethodDesc(g, m, method, path)
-	if body == "*" {
-		md.HasBody = true
+	if body == "byte" {
+		g.QualifiedGoIdent(protogen.GoImportPath("io/ioutil").Ident(""))
+		g.QualifiedGoIdent(protogen.GoImportPath("google.golang.org/genproto/googleapis/api/httpbody").Ident(""))
+		md.HasByte = true
+	}
+	if body == "file" {
+		g.QualifiedGoIdent(protogen.GoImportPath("mime/multipart").Ident(""))
+		md.HasFile = true
 	}
 	md.Comment = strings.ReplaceAll(m.Comments.Leading.String(), "\n", "")
 	return md
